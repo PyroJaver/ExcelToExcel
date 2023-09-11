@@ -17,14 +17,12 @@ import static org.apache.poi.ss.usermodel.Row.MissingCellPolicy.CREATE_NULL_AS_B
 public class Extractor {
 
 
-    public XSSFSheet prepareSheet() throws IOException {
+    public XSSFSheet prepareSheetToRead() throws IOException {
         //получаем доступ к листу эксель
         FileInputStream file = new FileInputStream(new File("C:\\Users\\kekec\\Desktop\\OasisHallandOfficeADasha.xlsx"));
         XSSFWorkbook workbook = new XSSFWorkbook(file);
         XSSFSheet sheet = workbook.getSheetAt(0);
         return sheet;
-
-
     }
 
     public HashMap<String, String> prepareTypesOfAnalyses() throws IOException {
@@ -60,12 +58,15 @@ public class Extractor {
     }
 
     public ArrayList<Sample> extract(HashMap<String, String> numbersOfAnalyses,
-                                     HashMap<String, String> typesOfAnalysis, XSSFSheet sheet) {
+                                     HashMap<String, String> typesOfAnalysis, XSSFSheet sheet) throws IOException {
         HashMap<String, String> sampleParts = new HashMap<>();
         ArrayList<Sample> extractedSamples = new ArrayList<>();
+        Writer writer = new Writer();
+        XSSFSheet xssfSheet = writer.prepareSheetToWrite();
+        HashMap<String, String> numberOfCellsToWrite = writer.prepareNumbersOfColumnsWrite();
         int sampleCounter = 0;
         //цикл, который пройдётся по всему листу
-        for (int rowCounterGlobal = 0; rowCounterGlobal < Integer.parseInt(typesOfAnalysis.get("RowsToExtract"));
+        for (int rowCounterGlobal = 1; rowCounterGlobal < Integer.parseInt(typesOfAnalysis.get("RowsToExtract"));
              rowCounterGlobal++) {
 
             //если текущая строка пустая, она пропускается
@@ -75,28 +76,38 @@ public class Extractor {
             }
             //получаем первую ячейку в текущей строке
             String cellContain = currentRow.getCell(0, CREATE_NULL_AS_BLANK).getStringCellValue();
-            //если ячейка пустая - пропускаем
-       //     if (cellContain == null) {
-       //         continue;
-       //     }
-            //это условие отбрасывает все строки, которые не удовлетворяют условиям поиска
-            if (!typesOfAnalysis.containsKey(cellContain)) {
-                continue;
-            }
+
+
             //эта условие считывает положение конца сэмпла и передаёт данные на Writer
+            // сэмпл бьётся при перемещении в экстрактед семплс
             if (Objects.equals(cellContain, "S")) {
                 sampleCounter++;
-             //   System.out.println(sampleParts);
                 Sample sample = new Sample(sampleParts);
-                extractedSamples.add(sample);
+                //  extractedSamples.add(sample);
+                writer.writeToExcel(numberOfCellsToWrite, sample, xssfSheet);
+                System.out.println(sampleParts.toString());
                 sampleParts.clear();
-
                 continue;
             }
 
             //эта секция вытаскивает сэмпл и танк
-            if (typesOfAnalysis.get(cellContain).equals("Sample")) {
+            if (cellContain.equals("Sample")) {
                 performSampleAndTankExtraction(currentRow, sampleParts);
+                continue;
+            }
+
+            //эта секция вытаскивает номер партии и инженера
+            //cellContain.equals("Responsible:") |
+            if ( cellContain.equals("Product:")) {
+                performBatchExtraction(currentRow, sampleParts);
+                continue;
+            }
+            if ( cellContain.equals("Responsible:")) {
+                performEngineerExtraction(currentRow, sampleParts);
+                continue;
+            }
+            //это условие отбрасывает все строки, которые не удовлетворяют условиям поиска
+            if (!typesOfAnalysis.containsKey(cellContain)) {
                 continue;
             }
             //эта секция вытаскивает коммент
@@ -120,15 +131,18 @@ public class Extractor {
             }
 
 
-
         }
         return extractedSamples;
     }
 
-
-
-
-
+    public void performEngineerExtraction(Row row, HashMap<String, String> sampleParts) {
+        sampleParts.put("Responsible", row.getCell(1).getStringCellValue());
+    }
+    public void performBatchExtraction(Row row, HashMap<String, String> sampleParts) {
+        if (row.getCell(4) != null) {
+            sampleParts.put("Product", row.getCell(4).getStringCellValue());
+        }
+    }
 
 
     public void performSampleAndTankExtraction(Row row, HashMap<String, String> sampleParts) {
