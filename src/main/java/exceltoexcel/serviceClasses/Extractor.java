@@ -2,6 +2,7 @@ package exceltoexcel.serviceClasses;
 
 import exceltoexcel.Sample;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -37,7 +38,6 @@ public class Extractor {
         for (Map.Entry<Object, Object> propertiesEntrySet : readingProperties.entrySet()) {
             typesOfAnalyses.put((String) propertiesEntrySet.getKey(), (String) propertiesEntrySet.getValue());
         }
-        // System.out.println(typesOfAnalyses.toString());
         return typesOfAnalyses;
     }
 
@@ -53,17 +53,14 @@ public class Extractor {
         for (Map.Entry<Object, Object> propertiesEntrySet : readingProperties.entrySet()) {
             numbersOfAnalyses.put((String) propertiesEntrySet.getKey(), (String) propertiesEntrySet.getValue());
         }
-        // System.out.println(typesOfAnalyses.toString());
         return numbersOfAnalyses;
     }
 
     public ArrayList<Sample> extract(HashMap<String, String> numbersOfAnalyses,
-                                     HashMap<String, String> typesOfAnalysis, XSSFSheet sheet) throws IOException {
+                                     HashMap<String, String> typesOfAnalysis, XSSFSheet sheet){
         HashMap<String, String> sampleParts = new HashMap<>();
         ArrayList<Sample> extractedSamples = new ArrayList<>();
-        Writer writer = new Writer();
-        XSSFSheet xssfSheet = writer.prepareSheetToWrite();
-        HashMap<String, String> numberOfCellsToWrite = writer.prepareNumbersOfColumnsWrite();
+
         int sampleCounter = 0;
         //цикл, который пройдётся по всему листу
         for (int rowCounterGlobal = 1; rowCounterGlobal < Integer.parseInt(typesOfAnalysis.get("RowsToExtract"));
@@ -79,19 +76,13 @@ public class Extractor {
 
 
             //эта условие считывает положение конца сэмпла и передаёт данные на Writer
-            // сэмпл бьётся при перемещении в экстрактед семплс
-            if (Objects.equals(cellContain, "S")) {
-                sampleCounter++;
-                Sample sample = new Sample(sampleParts);
-                //  extractedSamples.add(sample);
-                writer.writeToExcel(numberOfCellsToWrite, sample, xssfSheet);
-                System.out.println(sampleParts.toString());
-                sampleParts.clear();
-                continue;
-            }
-
             //эта секция вытаскивает сэмпл и танк
             if (cellContain.equals("Sample")) {
+                sampleCounter++;
+                Sample sample = new Sample(sampleParts);
+                extractedSamples.add(sample);
+                //          writer.writeToExcel(numberOfCellsToWrite, sample, workbook);
+                sampleParts.clear();
                 performSampleAndTankExtraction(currentRow, sampleParts);
                 continue;
             }
@@ -106,10 +97,16 @@ public class Extractor {
                 performEngineerExtraction(currentRow, sampleParts);
                 continue;
             }
+            //эта секция вытаскивает бокс
+            if (cellContain.equals("Free")) {
+                performBoxExtraction(sampleParts, sheet, rowCounterGlobal);
+                continue;
+            }
             //это условие отбрасывает все строки, которые не удовлетворяют условиям поиска
             if (!typesOfAnalysis.containsKey(cellContain)) {
                 continue;
             }
+
             //эта секция вытаскивает коммент
             if (typesOfAnalysis.get(cellContain).equals("Comments")) {
                 //этот участок служит для того, чтобы не брать в расчёт комментарии к анализам
@@ -119,11 +116,7 @@ public class Extractor {
                 performCommentExtraction(sampleParts, sheet, rowCounterGlobal);
                 continue;
             }
-            //эта секция вытаскивает бокс
-            if (typesOfAnalysis.get(cellContain).equals("Free")) {
-                performBoxExtraction(sampleParts, sheet, rowCounterGlobal);
-                continue;
-            }
+
             //эта секция проверяет все остальные анализы
             if (typesOfAnalysis.containsKey(cellContain)) {
                 performAnalysesExtraction(currentRow, sampleParts, numbersOfAnalyses);
@@ -176,7 +169,6 @@ public class Extractor {
         String comment2 = StringUtils.substringBefore(String.valueOf(comment), "....");
         String readyComment = StringUtils.substringBefore(String.valueOf(comment2), "Comments");
         sampleParts.put("Comments", readyComment);
-        //   System.out.println(sampleParts.toString());
     }
 
     public void performBoxExtraction(HashMap<String, String> sampleParts, XSSFSheet sheet, int rowCounterGlobal) {
@@ -184,7 +176,7 @@ public class Extractor {
         int rowCounter = 0;
 
         //этот вложенный цикл размером 5на5 объединяет 25 ячеек после ключевого слова "Free".
-        while (rowCounter < 5) {
+        while (rowCounter < 2) {
             Row row = sheet.getRow(rowCounterGlobal + rowCounter + 1);
             int cellCounter = 0;
             if (row == null) {
@@ -198,7 +190,6 @@ public class Extractor {
             }
             rowCounter++;
             sampleParts.put("Free", freeText.toString());
-            //     System.out.println(sampleParts.toString());
         }
     }
 
