@@ -4,6 +4,7 @@ import exceltoexcel.Sample;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -16,8 +17,8 @@ import java.util.*;
 import static org.apache.poi.ss.usermodel.Row.MissingCellPolicy.CREATE_NULL_AS_BLANK;
 
 public class Extractor {
-
-
+    ArrayList<Sample> extractedSamples = new ArrayList<>();
+    HashMap<String, String> sampleParts = new HashMap<>();
     public XSSFSheet prepareSheetToRead() throws IOException {
         //получаем доступ к листу эксель
         FileInputStream file = new FileInputStream(new File("C:\\Users\\kekec\\Desktop\\OasisHallandOfficeADasha.xlsx"));
@@ -58,13 +59,12 @@ public class Extractor {
 
     public ArrayList<Sample> extract(HashMap<String, String> numbersOfAnalyses,
                                      HashMap<String, String> typesOfAnalysis, XSSFSheet sheet){
-        HashMap<String, String> sampleParts = new HashMap<>();
-        ArrayList<Sample> extractedSamples = new ArrayList<>();
+
+
         int sampleCounter = 0;
         //цикл, который пройдётся по всему листу
-        for (int rowCounterGlobal = 1; rowCounterGlobal < Integer.parseInt(typesOfAnalysis.get("RowsToExtract"));
+        for (int rowCounterGlobal = 4; rowCounterGlobal < Integer.parseInt(typesOfAnalysis.get("RowsToExtract"));
              rowCounterGlobal++) {
-
             //если текущая строка пустая, она пропускается
             Row currentRow = sheet.getRow(rowCounterGlobal);
             if (currentRow == null) {
@@ -77,12 +77,15 @@ public class Extractor {
             //эта условие считывает положение конца сэмпла и передаёт данные на Writer
             //эта секция вытаскивает сэмпл и танк
             if (cellContain.equals("Sample")) {
-                Sample sample = new Sample(sampleParts);
+                  HashMap<String, String> sampleParts2 = new HashMap<>();
+                  sampleParts2.putAll(sampleParts);
+                Sample sample = new Sample();
+                sample.setSampleParts(sampleParts2);
                 extractedSamples.add(sampleCounter, sample);
             //    sample.setSampleParts(new HashMap<>());
-             //   System.out.println(extractedSamples.get(sampleCounter).getSampleParts().toString());
-             //   System.out.println(sample.getSampleParts().toString());
-                sampleParts.clear();
+            //    System.out.println(extractedSamples.get(sampleCounter).getSampleParts().toString());
+                //  System.out.println(sample.getSampleParts().toString());
+               sampleParts.clear();
                 sampleCounter++;
                 performSampleAndTankExtraction(currentRow, sampleParts);
                 continue;
@@ -124,7 +127,9 @@ public class Extractor {
                 continue;
             }
         }
-        System.out.println(extractedSamples.get(5).getSampleParts().toString());
+        for(Sample sample:extractedSamples) {
+            System.out.println(sample.getSampleParts().toString());
+        }
         return extractedSamples;
     }
 
@@ -150,16 +155,19 @@ public class Extractor {
         StringBuilder comment = new StringBuilder();
         int rowCounter = 0;
 
-        //этот вложенный цикл размером 7на10 объединяет 70 ячеек после ключевого слова "Comment".
-        while (rowCounter < 10) {
+        //этот вложенный цикл размером 12на25 объединяет ячейки после ключевого слова "Comment".
+        while (rowCounter < 12) {
             Row row = sheet.getRow(rowCounterGlobal + rowCounter + 1);
             int cellCounter = 0;
             if (row == null) {
                 rowCounter++;
                 continue;
             }
-            while (cellCounter < 7) {
+            while (cellCounter < 25) {
                 Cell cell = row.getCell(cellCounter, CREATE_NULL_AS_BLANK);
+                if(cell.getCellType()== CellType.NUMERIC){
+                    cell.setCellType(CellType.STRING);
+                }
                 comment.append(cell.getStringCellValue() + " ");
                 cellCounter++;
             }

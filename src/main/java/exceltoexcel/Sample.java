@@ -7,6 +7,9 @@ public class Sample {
         this.sampleParts = sampleParts;
     }
 
+    public Sample() {
+    }
+
     public HashMap<String, String> getSampleParts() {
         return sampleParts;
     }
