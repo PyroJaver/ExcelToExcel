@@ -60,7 +60,6 @@ public class Extractor {
                                      HashMap<String, String> typesOfAnalysis, XSSFSheet sheet){
         HashMap<String, String> sampleParts = new HashMap<>();
         ArrayList<Sample> extractedSamples = new ArrayList<>();
-
         int sampleCounter = 0;
         //цикл, который пройдётся по всему листу
         for (int rowCounterGlobal = 1; rowCounterGlobal < Integer.parseInt(typesOfAnalysis.get("RowsToExtract"));
@@ -78,11 +77,13 @@ public class Extractor {
             //эта условие считывает положение конца сэмпла и передаёт данные на Writer
             //эта секция вытаскивает сэмпл и танк
             if (cellContain.equals("Sample")) {
-                sampleCounter++;
                 Sample sample = new Sample(sampleParts);
-                extractedSamples.add(sample);
-                //          writer.writeToExcel(numberOfCellsToWrite, sample, workbook);
+                extractedSamples.add(sampleCounter, sample);
+            //    sample.setSampleParts(new HashMap<>());
+             //   System.out.println(extractedSamples.get(sampleCounter).getSampleParts().toString());
+             //   System.out.println(sample.getSampleParts().toString());
                 sampleParts.clear();
+                sampleCounter++;
                 performSampleAndTankExtraction(currentRow, sampleParts);
                 continue;
             }
@@ -122,9 +123,8 @@ public class Extractor {
                 performAnalysesExtraction(currentRow, sampleParts, numbersOfAnalyses);
                 continue;
             }
-
-
         }
+        System.out.println(extractedSamples.get(5).getSampleParts().toString());
         return extractedSamples;
     }
 

@@ -1,8 +1,6 @@
 package exceltoexcel.serviceClasses;
 
 import exceltoexcel.Sample;
-import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
-import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
@@ -16,14 +14,8 @@ import java.io.IOException;
 import java.util.*;
 
 public class Writer {
+    //эта переменная указывает, с какой строки начнётся запись в файл
     int currentRow = 7;
-    public XSSFWorkbook prepareSheetToWrite() throws IOException {
-        //получаем доступ к листу эксель
-        File fileToWrite = new File("C:\\Users\\kekec\\Desktop\\HallOffice2023Test.xlsx");
-        XSSFWorkbook workbook = new XSSFWorkbook();
-  //      XSSFSheet sheet = workbook.getSheetAt(0);
-        return workbook;
-    }
     public HashMap<String, String> prepareNumbersOfColumnsWrite() throws IOException {
 
         //получаем доступ к файлу пропертис с именами анализов
@@ -37,23 +29,32 @@ public class Writer {
             numbersOfColumnsToWrite.put((String) propertiesEntrySet.getKey(),
                     (String) propertiesEntrySet.getValue());
         }
-        // System.out.println(typesOfAnalyses.toString());
         return numbersOfColumnsToWrite;
     }
-    public void writeToExcel(HashMap<String, String> numbersOfCellsToWrite, Sample sampleToWrite, XSSFWorkbook workbook){
-
-        HashMap<String, String> sampleParts = sampleToWrite.getSampleParts();
-        Set<Map.Entry<String, String>> samplePartsSet = sampleParts.entrySet();
-        XSSFSheet sheetToWrite = workbook.getSheetAt(0);
-        Row row = sheetToWrite.createRow(currentRow);
-;
-
-        for(Map.Entry<String, String> samplePart:samplePartsSet){
+    public void writeToExcel(HashMap<String, String> numbersOfCellsToWrite, ArrayList<Sample> samplesToWrite) {
+        XSSFWorkbook workbook = new XSSFWorkbook();
+        XSSFSheet sheetToWrite = workbook.createSheet("HallOffice2023TestSheet");
+        for (Sample sampleToWrite : samplesToWrite) {
+          //  System.out.println(sampleToWrite.getSampleParts().toString());
+            HashMap<String, String> sampleParts = sampleToWrite.getSampleParts();
+            Set<Map.Entry<String, String>> samplePartsSet = sampleParts.entrySet();
+            Row row = sheetToWrite.createRow(currentRow);
+            for (Map.Entry<String, String> samplePart : samplePartsSet) {
                 Cell currentCell = row.createCell(Integer.parseInt(numbersOfCellsToWrite.get(samplePart.getKey())),
                         CellType.STRING);
                 currentCell.setCellValue(samplePart.getValue());
-         //   }
+            }
+            currentRow++;
+
         }
-        currentRow++;
+        try{
+            FileOutputStream outputWorkbookStream =
+                    new FileOutputStream(new File("C:\\Users\\kekec\\Desktop\\HallOffice2023Test.xlsx"));
+            workbook.write(outputWorkbookStream);
+        }
+        catch (Exception e){
+            e.printStackTrace();
+        }
     }
+
 }
