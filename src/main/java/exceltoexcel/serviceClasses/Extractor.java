@@ -13,57 +13,30 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Pattern;
 
 import static org.apache.poi.ss.usermodel.Row.MissingCellPolicy.CREATE_NULL_AS_BLANK;
 
 public class Extractor {
     ArrayList<Sample> extractedSamples = new ArrayList<>();
     HashMap<String, String> sampleParts = new HashMap<>();
+    // в множество unknownStrings собираются те строки, которые не попадают ни под одно из условий экстракции,
+    //эти строки могут быть полезны при переналадке программы под другие продукты.
+    HashSet<String> unknownStrings = new HashSet<>();
+
     public XSSFSheet prepareSheetToRead() throws IOException {
-        //получаем доступ к листу эксель
+        //получаем доступ к листу
         FileInputStream file = new FileInputStream(new File("C:\\Users\\kekec\\Desktop\\OasisHallandOfficeADasha.xlsx"));
         XSSFWorkbook workbook = new XSSFWorkbook(file);
         XSSFSheet sheet = workbook.getSheetAt(0);
         return sheet;
     }
 
-    public HashMap<String, String> prepareTypesOfAnalyses() throws IOException {
-
-        //получаем доступ к файлу пропертис с именами анализов
-        String rootPath = Thread.currentThread().getContextClassLoader().getResource("").getPath();
-        String appConfigPath = rootPath + "analyses_reading_names.properties";
-        Properties readingProperties = new Properties();
-        readingProperties.load(new FileInputStream(appConfigPath));
-        HashMap<String, String> typesOfAnalyses = new HashMap<>();
-        //считываем все записи из пропертис и заполняем хэшмапу с типами испытаний
-        for (Map.Entry<Object, Object> propertiesEntrySet : readingProperties.entrySet()) {
-            typesOfAnalyses.put((String) propertiesEntrySet.getKey(), (String) propertiesEntrySet.getValue());
-        }
-        return typesOfAnalyses;
-    }
-
-    public HashMap<String, String> prepareNumbersOfCellWithAnalyse() throws IOException {
-
-        //получаем доступ к файлу пропертис с именами анализов
-        String rootPath = Thread.currentThread().getContextClassLoader().getResource("").getPath();
-        String appConfigPath = rootPath + "analyses_reading_numbers_of_cells.properties";
-        Properties readingProperties = new Properties();
-        readingProperties.load(new FileInputStream(appConfigPath));
-        HashMap<String, String> numbersOfAnalyses = new HashMap<>();
-        //считываем все записи из пропертис и заполняем хэшмапу с типами испытаний
-        for (Map.Entry<Object, Object> propertiesEntrySet : readingProperties.entrySet()) {
-            numbersOfAnalyses.put((String) propertiesEntrySet.getKey(), (String) propertiesEntrySet.getValue());
-        }
-        return numbersOfAnalyses;
-    }
-
     public ArrayList<Sample> extract(HashMap<String, String> numbersOfAnalyses,
-                                     HashMap<String, String> typesOfAnalysis, XSSFSheet sheet){
-
-
+                                     HashMap<String, String> typesOfAnalysis, XSSFSheet sheet) {
         int sampleCounter = 0;
         //цикл, который пройдётся по всему листу
-        for (int rowCounterGlobal = 4; rowCounterGlobal < Integer.parseInt(typesOfAnalysis.get("RowsToExtract"));
+        for (int rowCounterGlobal = 4; rowCounterGlobal < 18700;
              rowCounterGlobal++) {
             //если текущая строка пустая, она пропускается
             Row currentRow = sheet.getRow(rowCounterGlobal);
@@ -71,43 +44,50 @@ public class Extractor {
                 continue;
             }
             //получаем первую ячейку в текущей строке
-            String cellContain = currentRow.getCell(0, CREATE_NULL_AS_BLANK).getStringCellValue();
+            Cell currentCell = currentRow.getCell(0, CREATE_NULL_AS_BLANK);
+            currentCell.setCellType(CellType.STRING);
+            String cellContain = currentCell.getStringCellValue();
 
 
-            //эта условие считывает положение конца сэмпла и передаёт данные на Writer
-            //эта секция вытаскивает сэмпл и танк
+            //этот сегмент помогает найти неучтённые анализы при переналадке программы на другой продукт. Он ломает
+            //выгрузку инженера, поэтому должен закомменчиваться в работе
+            if (!typesOfAnalysis.containsKey(cellContain)) {
+                //условие отсекает строки, содержащие слэш и кириллицу
+                if (!cellContain.contains("/") & !Pattern.matches(".*\\p{InCyrillic}.*", cellContain)) {
+                    unknownStrings.add(cellContain);
+                }
+                continue;
+            }
+            // этот сегмент проставляет точки между днём, месяцем и годом в датах
+            if (cellContain.equals("Custom./Chem.")) {
+                StringBuilder dateBuilder = new StringBuilder();
+                dateBuilder = dateBuilder.append(currentRow.getCell(3).getStringCellValue())
+                        .insert(2, ".").insert(5, ".");
+                String date = dateBuilder.toString();
+                sampleParts.put("Custom./Chem.", date);
+                continue;
+            }
+            //эта условие считывает положение конца сэмпла и передаёт данные на Writer, затем считывает сэмпл и танк
             if (cellContain.equals("Sample")) {
-                  HashMap<String, String> sampleParts2 = new HashMap<>();
-                  sampleParts2.putAll(sampleParts);
+                HashMap<String, String> sampleParts2 = new HashMap<>();
+                sampleParts2.putAll(sampleParts);
                 Sample sample = new Sample();
                 sample.setSampleParts(sampleParts2);
+                System.out.println(sampleParts2.toString());
                 extractedSamples.add(sampleCounter, sample);
-            //    sample.setSampleParts(new HashMap<>());
-            //    System.out.println(extractedSamples.get(sampleCounter).getSampleParts().toString());
-                //  System.out.println(sample.getSampleParts().toString());
-               sampleParts.clear();
+                sampleParts.clear();
                 sampleCounter++;
                 performSampleAndTankExtraction(currentRow, sampleParts);
                 continue;
             }
 
-            //эта секция вытаскивает номер партии и инженера
-            //cellContain.equals("Responsible:") |
-            if ( cellContain.equals("Product:")) {
-                performBatchExtraction(currentRow, sampleParts);
-                continue;
-            }
-            if ( cellContain.equals("Responsible:")) {
-                performEngineerExtraction(currentRow, sampleParts);
-                continue;
+            //эта секция проверяет, имеется ли в виду приёмо-сдаточный вид плёнки, либо периодический
+            if (cellContain.equals("Film")) {
+                performFilmExtraction(currentRow, sampleParts);
             }
             //эта секция вытаскивает бокс
             if (cellContain.equals("Free")) {
                 performBoxExtraction(sampleParts, sheet, rowCounterGlobal);
-                continue;
-            }
-            //это условие отбрасывает все строки, которые не удовлетворяют условиям поиска
-            if (!typesOfAnalysis.containsKey(cellContain)) {
                 continue;
             }
 
@@ -126,25 +106,37 @@ public class Extractor {
                 performAnalysesExtraction(currentRow, sampleParts, numbersOfAnalyses);
                 continue;
             }
+
         }
-        for(Sample sample:extractedSamples) {
+        for (Sample sample : extractedSamples) {
             System.out.println(sample.getSampleParts().toString());
         }
+        System.out.println(unknownStrings.toString());
         return extractedSamples;
     }
 
     public void performEngineerExtraction(Row row, HashMap<String, String> sampleParts) {
         sampleParts.put("Responsible", row.getCell(1).getStringCellValue());
     }
+
     public void performBatchExtraction(Row row, HashMap<String, String> sampleParts) {
-        if (row.getCell(4) != null) {
-            sampleParts.put("Product", row.getCell(4).getStringCellValue());
+        sampleParts.put("Product", row.getCell(4).getStringCellValue());
+    }
+
+    public void performFilmExtraction(Row row, HashMap<String, String> sampleParts) {
+        if (row.getCell(1).getStringCellValue().equals("color")) {
+            sampleParts.put("FilmColor", row.getCell(2).getStringCellValue());
+        }
+        if (row.getCell(1).getStringCellValue().equals("appearance")) {
+            sampleParts.put("FilmAppearance", row.getCell(2).getStringCellValue());
         }
     }
 
-
     public void performSampleAndTankExtraction(Row row, HashMap<String, String> sampleParts) {
-        sampleParts.put("Sample", row.getCell(2).getStringCellValue());
+        String sample = row.getCell(2).getStringCellValue();
+        Character lastSymbolOfSample = sample.charAt(sample.length() - 1);
+        String lastNumberOfSample = lastSymbolOfSample.toString();
+        sampleParts.put("Sample", lastNumberOfSample);
         //эта проверка нужна потому, что инженеры НЕ ВСЕГДА забивают танк, и на пустой ячейке программа крашится
         if (row.getCell(4) != null) {
             sampleParts.put("Tank", row.getCell(4).getStringCellValue());
@@ -165,7 +157,7 @@ public class Extractor {
             }
             while (cellCounter < 25) {
                 Cell cell = row.getCell(cellCounter, CREATE_NULL_AS_BLANK);
-                if(cell.getCellType()== CellType.NUMERIC){
+                if (cell.getCellType() == CellType.NUMERIC) {
                     cell.setCellType(CellType.STRING);
                 }
                 comment.append(cell.getStringCellValue() + " ");
@@ -173,7 +165,7 @@ public class Extractor {
             }
             rowCounter++;
         }
-        //эта хуёво написанная секция фильтрует лишние части комментария. Работает, значит, и переделывать не нужно
+        //эта секция фильтрует лишние части комментария
         String comment2 = StringUtils.substringBefore(String.valueOf(comment), "....");
         String readyComment = StringUtils.substringBefore(String.valueOf(comment2), "Comments");
         sampleParts.put("Comments", readyComment);
@@ -184,7 +176,7 @@ public class Extractor {
         int rowCounter = 0;
 
         //этот вложенный цикл размером 5на5 объединяет 25 ячеек после ключевого слова "Free".
-        while (rowCounter < 2) {
+        while (rowCounter < 5) {
             Row row = sheet.getRow(rowCounterGlobal + rowCounter + 1);
             int cellCounter = 0;
             if (row == null) {
@@ -203,8 +195,10 @@ public class Extractor {
 
     public void performAnalysesExtraction(Row row, HashMap<String, String> sampleParts,
                                           HashMap<String, String> numbersOfAnalyses) {
-        sampleParts.put(row.getCell(0).getStringCellValue(),
-                row.getCell(Integer.parseInt(numbersOfAnalyses.get(row.getCell(0).getStringCellValue()))).getStringCellValue());
-
+        Cell currentCell = row.getCell(0);
+        Cell cellWithValueOfAnalysis = row.getCell(Integer.parseInt(numbersOfAnalyses.get(currentCell.getStringCellValue())));
+        cellWithValueOfAnalysis.setCellType(CellType.STRING);
+        currentCell.setCellType(CellType.STRING);
+        sampleParts.put(currentCell.getStringCellValue(), cellWithValueOfAnalysis.getStringCellValue());
     }
 }
