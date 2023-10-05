@@ -18,8 +18,6 @@ public class ApplicationRunner {
         HashMap<String, String> numbersOfCellsToWrite = utils.prepareProperties("analyses_writing_numbers_of_cells.properties");
         ArrayList<Sample> extractedSamples = extractor.extract(numbersOfCellsToRead, typesOfAnalyses,sheet);
         writer.writeToExcel(numbersOfCellsToWrite, extractedSamples);
-
     }
-
 }
 
